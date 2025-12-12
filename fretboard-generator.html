@@ -147,12 +147,11 @@
             <label>
                 表示モード:
                 <select id="displayMode">
-                    <option value="triad">トライアドのみ</option>
+                    <option value="triad" selected>トライアドのみ</option>
                     <option value="seventh">セブンス含む</option>
-                    <option value="all">全ポジション</option>
+                    <option value="all" id="allModeOption" style="display: none;">全ポジション</option>
                 </select>
             </label>
-            <button onclick="generateFretboard()">生成</button>
             <button onclick="downloadSVG()">SVGダウンロード</button>
             <button onclick="downloadPNG()">PNGダウンロード</button>
         </div>
@@ -256,6 +255,15 @@
             'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
             'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
         };
+        
+        // 異名同音のマッピング（Eb = D#, Gb = F#など）
+        const enharmonicMap = {
+            'Eb': 'D#', 'D#': 'Eb',
+            'Gb': 'F#', 'F#': 'Gb',
+            'Ab': 'G#', 'G#': 'Ab',
+            'Bb': 'A#', 'A#': 'Bb',
+            'Db': 'C#', 'C#': 'Db'
+        };
 
         function getNoteAtPosition(stringIndex, fret) {
             const openNote = stringNotes[stringIndex];
@@ -263,21 +271,399 @@
             const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
             return noteNames[semitone];
         }
+        
+        // 異名同音のマッピング（Eb = D#, Gb = F#など）
+        function isEnharmonicEquivalent(note1, note2) {
+            if (!note1 || !note2) return false; // nullやundefinedの場合はfalse
+            if (note1 === note2) return true;
+            const enharmonicPairs = {
+                'Eb': 'D#', 'D#': 'Eb',
+                'Gb': 'F#', 'F#': 'Gb',
+                'Ab': 'G#', 'G#': 'Ab',
+                'Bb': 'A#', 'A#': 'Bb',
+                'Db': 'C#', 'C#': 'Db'
+            };
+            return enharmonicPairs[note1] === note2 || enharmonicPairs[note2] === note1;
+        }
 
         function getToneType(note, chord) {
             const tones = chordTones[chord];
-            if (!tones) return null;
-            if (note === tones.root) return 'root';
-            if (note === tones.third) return 'third';
-            if (note === tones.fifth) return 'fifth';
-            if (tones.seventh && note === tones.seventh) return 'seventh';
-            if (tones.dim5 && note === tones.dim5) return 'dim5';
-            if (tones.aug5 && note === tones.aug5) return 'aug5';
-            if (tones.sus2 && note === tones.sus2) return 'sus2';
-            if (tones.sus4 && note === tones.sus4) return 'sus4';
-            if (tones.ninth && note === tones.ninth) return 'ninth';
-            if (tones.sixth && note === tones.sixth) return 'sixth';
+            if (!tones || !note) return null;
+            
+            // 1. コードに定義されているトーンを優先的にチェック（異名同音も考慮）
+            if (note === tones.root || isEnharmonicEquivalent(note, tones.root)) return 'root';
+            if (note === tones.third || isEnharmonicEquivalent(note, tones.third)) return 'third';
+            // fifthはdim5/aug5の前にチェック（通常の5thの場合）
+            if (tones.fifth && (note === tones.fifth || isEnharmonicEquivalent(note, tones.fifth))) return 'fifth';
+            // dim5とaug5はfifthの後にチェック（dim5/aug5が優先される）
+            if (tones.dim5 && (note === tones.dim5 || isEnharmonicEquivalent(note, tones.dim5))) return 'dim5';
+            if (tones.aug5 && (note === tones.aug5 || isEnharmonicEquivalent(note, tones.aug5))) return 'aug5';
+            if (tones.seventh && (note === tones.seventh || isEnharmonicEquivalent(note, tones.seventh))) return 'seventh';
+            if (tones.sus2 && (note === tones.sus2 || isEnharmonicEquivalent(note, tones.sus2))) return 'sus2';
+            if (tones.sus4 && (note === tones.sus4 || isEnharmonicEquivalent(note, tones.sus4))) return 'sus4';
+            if (tones.ninth && (note === tones.ninth || isEnharmonicEquivalent(note, tones.ninth))) return 'ninth';
+            if (tones.sixth && (note === tones.sixth || isEnharmonicEquivalent(note, tones.sixth))) return 'sixth';
+            
+            // 2. コードに7thが定義されていない場合のみ、ルートから計算した7thを返す
+            // これにより、メジャー/マイナーコードでも7thを表示できる
+            // メジャーコードの場合はDominant 7th（10半音）、マイナーコードの場合はMinor 7th（10半音）を優先
+            if (tones.root && !tones.seventh) {
+                const rootSemitone = noteToSemitone[tones.root];
+                const noteSemitone = noteToSemitone[note];
+                
+                // 音名がマッピングに存在することを確認
+                if (rootSemitone !== undefined && noteSemitone !== undefined) {
+                    const interval = (noteSemitone - rootSemitone + 12) % 12;
+                    
+                    // 既に他のトーンとして認識されている場合は除外（異名同音も考慮）
+                    const isOtherTone = isEnharmonicEquivalent(note, tones.root) || 
+                                       isEnharmonicEquivalent(note, tones.third) || 
+                                       isEnharmonicEquivalent(note, tones.fifth) ||
+                                       (tones.dim5 && isEnharmonicEquivalent(note, tones.dim5)) ||
+                                       (tones.aug5 && isEnharmonicEquivalent(note, tones.aug5)) ||
+                                       (tones.sus2 && isEnharmonicEquivalent(note, tones.sus2)) ||
+                                       (tones.sus4 && isEnharmonicEquivalent(note, tones.sus4));
+                    
+                    if (isOtherTone) {
+                        return null;
+                    }
+                    
+                    // メジャーコード（thirdが存在し、♭3rdでない）の場合はDominant 7th（10半音）のみ
+                    // マイナーコード（thirdが♭3rd）の場合もMinor 7th（10半音）のみ
+                    // Major 7th（11半音）は通常、明示的にmaj7と指定された場合のみ使用
+                    if (interval === 10) {
+                        // Minor 7th / Dominant 7th（10半音）
+                        return 'seventh';
+                    }
+                    // interval === 11 (Major 7th) は計算しない（maj7として明示的に定義されている場合のみ表示）
+                }
+            }
+            
             return null;
+        }
+
+        // コードトーンを囲む図形を描画
+        function drawToneOutlines(svg, tonePositions, displayMode, tones) {
+            // 表示するトーンタイプを決定
+            let toneTypes = [];
+            if (displayMode === 'triad') {
+                if (tones.sus2) toneTypes = ['root', 'sus2', 'fifth'];
+                else if (tones.sus4) toneTypes = ['root', 'sus4', 'fifth'];
+                else if (tones.dim5) toneTypes = ['root', 'third', 'dim5'];
+                else if (tones.aug5) toneTypes = ['root', 'third', 'aug5'];
+                else toneTypes = ['root', 'third', 'fifth'];
+            } else if (displayMode === 'seventh') {
+                if (tones.seventh) toneTypes = ['root', 'third', 'fifth', 'seventh'];
+                else if (tones.dim5) toneTypes = ['root', 'third', 'dim5'];
+                else if (tones.aug5) toneTypes = ['root', 'third', 'aug5'];
+                else toneTypes = ['root', 'third', 'fifth'];
+            } else {
+                // 全ポジション: 利用可能なすべてのトーン
+                toneTypes = Object.keys(tonePositions).filter(key => tonePositions[key] && tonePositions[key].length > 0);
+            }
+            
+            // 各トーンタイプのすべてのポジションを1つのグループとして収集
+            const allPositions = [];
+            toneTypes.forEach(type => {
+                if (tonePositions[type] && tonePositions[type].length > 0) {
+                    tonePositions[type].forEach(pos => {
+                        allPositions.push({ ...pos, type });
+                    });
+                }
+            });
+            
+            if (allPositions.length < 2) return;
+            
+            // 近接するポジションをグループ化（同じコードフォーム内）
+            const groups = findChordFormGroups(allPositions, toneTypes);
+            
+            groups.forEach((group) => {
+                if (group.length < 2) return;
+                
+                // ルートを起点として、コードフォームに沿って並べ替え
+                const sortedGroup = sortByChordForm(group, toneTypes, tonePositions);
+                
+                if (sortedGroup.length < 2) return;
+                
+                // コードフォームに沿った囲みを描画（角を丸く、内側にマージン）
+                drawRoundedOutline(svg, sortedGroup);
+            });
+        }
+        
+        // コードフォームごとにグループ化（R, 3rd, 5thなどが1つのグループ）
+        function findChordFormGroups(allPositions, toneTypes) {
+            const groups = [];
+            const used = new Set();
+            
+            // 各ポジションについて、同じコードフォーム内の他のトーンを探す
+            allPositions.forEach(pos => {
+                const key = `${pos.string}-${pos.fret}`;
+                if (used.has(key)) return;
+                
+                const group = [pos];
+                used.add(key);
+                
+                // 同じコードフォーム内の他のトーンを探す
+                // 近接する範囲内（6フレット、4弦以内）で、必要なトーンタイプがすべて揃っているか確認
+                const fretRange = 6;
+                const stringRange = 4;
+                
+                // このポジションを中心に、必要なトーンタイプがすべて揃っているグループを探す
+                const nearbyPositions = allPositions.filter(other => {
+                    const otherKey = `${other.string}-${other.fret}`;
+                    if (used.has(otherKey)) return false;
+                    
+                    const fretDiff = Math.abs(pos.fret - other.fret);
+                    const stringDiff = Math.abs(pos.string - other.string);
+                    return fretDiff <= fretRange && stringDiff <= stringRange;
+                });
+                
+                // 必要なトーンタイプがすべて揃っているか確認
+                const foundTypes = new Set([pos.type]);
+                nearbyPositions.forEach(other => {
+                    foundTypes.add(other.type);
+                });
+                
+                // 必要なトーンタイプがすべて揃っている場合、グループに追加
+                const hasAllTypes = toneTypes.every(type => foundTypes.has(type));
+                
+                if (hasAllTypes) {
+                    // 各トーンタイプから最も近いポジションを1つずつ選ぶ
+                    const selectedPositions = [pos];
+                    toneTypes.forEach(type => {
+                        if (type === pos.type) return; // 既に追加済み
+                        
+                        const candidates = nearbyPositions.filter(p => p.type === type);
+                        if (candidates.length > 0) {
+                            // 既に選択されたポジションに最も近いものを選ぶ
+                            let closest = null;
+                            let minDist = Infinity;
+                            
+                            candidates.forEach(candidate => {
+                                selectedPositions.forEach(selected => {
+                                    const dist = Math.abs(candidate.string - selected.string) + 
+                                                 Math.abs(candidate.fret - selected.fret);
+                                    if (dist < minDist) {
+                                        minDist = dist;
+                                        closest = candidate;
+                                    }
+                                });
+                            });
+                            
+                            if (closest) {
+                                selectedPositions.push(closest);
+                                used.add(`${closest.string}-${closest.fret}`);
+                            }
+                        }
+                    });
+                    
+                    if (selectedPositions.length >= 2) {
+                        groups.push(selectedPositions);
+                    }
+                }
+            });
+            
+            return groups;
+        }
+        
+        // ルートを起点として、コードフォームに沿って並べ替え
+        function sortByChordForm(group, toneTypes, tonePositions) {
+            // ルートを探す（typeプロパティがある場合はそれを使用）
+            const roots = group.filter(p => {
+                if (p.type === 'root') return true;
+                // typeプロパティがない場合は、tonePositionsで確認
+                return tonePositions.root && tonePositions.root.some(r => r.string === p.string && r.fret === p.fret);
+            });
+            
+            if (roots.length === 0) {
+                // ルートがない場合は、最も低いフレットの位置を起点にする
+                group.sort((a, b) => {
+                    if (a.fret !== b.fret) return a.fret - b.fret;
+                    return a.string - b.string;
+                });
+                return group;
+            }
+            
+            // ルートを起点として、トーンタイプの順序で並べ替え
+            const root = roots[0];
+            const sorted = [root];
+            const used = new Set([`${root.string}-${root.fret}`]);
+            
+            // トーンタイプの順序に従って追加（ルート以外）
+            toneTypes.forEach(type => {
+                if (type === 'root') return;
+                
+                const candidates = group.filter(p => {
+                    const key = `${p.string}-${p.fret}`;
+                    if (used.has(key)) return false;
+                    return p.type === type;
+                });
+                
+                if (candidates.length > 0) {
+                    // 既に追加されたポジションに最も近いものを選ぶ
+                    let closest = null;
+                    let minDist = Infinity;
+                    
+                    candidates.forEach(candidate => {
+                        sorted.forEach(selected => {
+                            const dist = Math.abs(candidate.string - selected.string) + 
+                                         Math.abs(candidate.fret - selected.fret);
+                            if (dist < minDist) {
+                                minDist = dist;
+                                closest = candidate;
+                            }
+                        });
+                    });
+                    
+                    if (closest) {
+                        sorted.push(closest);
+                        used.add(`${closest.string}-${closest.fret}`);
+                    }
+                }
+            });
+            
+            return sorted;
+        }
+        
+        // 角を丸くした囲みを描画（内側にマージン）
+        function drawRoundedOutline(svg, positions) {
+            if (positions.length < 2) return;
+            
+            const margin = 18; // コードトーンの円の半径 + マージン
+            const cornerRadius = 8; // 角の丸み
+            
+            // 各位置の周りにマージンを追加した点を計算
+            const expandedPoints = positions.map(pos => {
+                // 隣接する点との関係を考慮してマージンを追加
+                return {
+                    x: pos.x,
+                    y: pos.y,
+                    margin: margin
+                };
+            });
+            
+            // パスを構築（角を丸く）
+            let pathData = '';
+            
+            if (positions.length === 2) {
+                // 2点の場合は線を描画
+                const p1 = expandedPoints[0];
+                const p2 = expandedPoints[1];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+                
+                // 各点の周りに円を描く
+                pathData = `M ${p1.x + Math.cos(angle + Math.PI / 2) * margin},${p1.y + Math.sin(angle + Math.PI / 2) * margin} ` +
+                          `A ${margin},${margin} 0 0 1 ${p1.x + Math.cos(angle - Math.PI / 2) * margin},${p1.y + Math.sin(angle - Math.PI / 2) * margin} ` +
+                          `L ${p2.x + Math.cos(angle - Math.PI / 2) * margin},${p2.y + Math.sin(angle - Math.PI / 2) * margin} ` +
+                          `A ${margin},${margin} 0 0 1 ${p2.x + Math.cos(angle + Math.PI / 2) * margin},${p2.y + Math.sin(angle + Math.PI / 2) * margin} Z`;
+            } else {
+                // 3点以上の場合は閉じたパスを描画
+                const points = expandedPoints.map(p => ({ x: p.x, y: p.y }));
+                
+                // 各点の周りにマージンを追加した形状を作成
+                pathData = buildRoundedPath(points, margin, cornerRadius);
+            }
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.setAttribute('fill', 'rgba(255, 255, 255, 0.15)');
+            path.setAttribute('stroke', 'rgba(255, 255, 255, 0.6)');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-dasharray', '5,5');
+            
+            // コードトーンの下に配置
+            svg.insertBefore(path, svg.firstChild);
+        }
+        
+        // 角を丸くしたパスを構築
+        function buildRoundedPath(points, margin, cornerRadius) {
+            if (points.length < 3) return '';
+            
+            let path = '';
+            const n = points.length;
+            
+            for (let i = 0; i < n; i++) {
+                const p1 = points[i];
+                const p2 = points[(i + 1) % n];
+                const p0 = points[(i - 1 + n) % n];
+                
+                // 各点から外側への方向を計算
+                const angle1 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+                const angle2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                const bisectAngle = (angle1 + angle2) / 2;
+                
+                // マージンを追加した位置を計算
+                const offsetX = Math.cos(bisectAngle + Math.PI / 2) * margin;
+                const offsetY = Math.sin(bisectAngle + Math.PI / 2) * margin;
+                
+                const x = p1.x + offsetX;
+                const y = p1.y + offsetY;
+                
+                if (i === 0) {
+                    path += `M ${x},${y} `;
+                } else {
+                    // 前の点から現在の点への線（角を丸く）
+                    const prevP = points[(i - 1 + n) % n];
+                    const prevAngle1 = Math.atan2(prevP.y - points[(i - 2 + n) % n].y, prevP.x - points[(i - 2 + n) % n].x);
+                    const prevAngle2 = Math.atan2(p1.y - prevP.y, p1.x - prevP.x);
+                    const prevBisect = (prevAngle1 + prevAngle2) / 2;
+                    const prevX = prevP.x + Math.cos(prevBisect + Math.PI / 2) * margin;
+                    const prevY = prevP.y + Math.sin(prevBisect + Math.PI / 2) * margin;
+                    
+                    // 角を丸くするための曲線
+                    path += `L ${prevX},${prevY} Q ${p1.x + offsetX * 0.5},${p1.y + offsetY * 0.5} ${x},${y} `;
+                }
+            }
+            
+            path += 'Z';
+            return path;
+        }
+
+
+        // 凸包（Convex Hull）を計算（Graham scan algorithm）
+        function calculateConvexHull(points) {
+            if (points.length < 3) return points;
+            
+            // 最も下（yが最大）で、その中で最も左（xが最小）の点を見つける
+            let bottomPoint = points[0];
+            for (let i = 1; i < points.length; i++) {
+                if (points[i].y > bottomPoint.y || 
+                    (points[i].y === bottomPoint.y && points[i].x < bottomPoint.x)) {
+                    bottomPoint = points[i];
+                }
+            }
+            
+            // 各点の角度を計算してソート
+            const sorted = points
+                .filter(p => p !== bottomPoint)
+                .map(p => ({
+                    ...p,
+                    angle: Math.atan2(p.y - bottomPoint.y, p.x - bottomPoint.x)
+                }))
+                .sort((a, b) => a.angle - b.angle);
+            
+            // スタックを使って凸包を構築
+            const hull = [bottomPoint];
+            for (let i = 0; i < sorted.length; i++) {
+                while (hull.length >= 2) {
+                    const p1 = hull[hull.length - 2];
+                    const p2 = hull[hull.length - 1];
+                    const p3 = sorted[i];
+                    
+                    // 右回りかどうかをチェック
+                    const cross = (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+                    if (cross <= 0) break;
+                    hull.pop();
+                }
+                hull.push(sorted[i]);
+            }
+            
+            return hull;
         }
 
         function generateFretboard() {
@@ -359,6 +745,20 @@
                 svg.appendChild(text);
             }
 
+            // コードトーンの位置を収集（囲み用）
+            const tonePositions = {
+                root: [],
+                third: [],
+                fifth: [],
+                seventh: [],
+                dim5: [],
+                aug5: [],
+                sus2: [],
+                sus4: [],
+                ninth: [],
+                sixth: []
+            };
+
             // コードトーンを描画
             for (let s = 0; s < strings.length; s++) {
                 for (let f = 0; f <= fretCount; f++) {
@@ -369,15 +769,41 @@
                     if (toneType) {
                         // 表示モードのチェック
                         // サスペンドコード（sus2, sus4）はトライアドの一部として扱う
-                        const isExtendedTone = ['seventh', 'dim5', 'aug5', 'ninth', 'sixth'].includes(toneType);
+                        // ディミニッシュ（dim5）とオーギュメント（aug5）もトライアドの一部として扱う
                         const isSusTone = ['sus2', 'sus4'].includes(toneType);
-                        if (displayMode === 'triad' && isExtendedTone) continue;
-                        if (displayMode === 'all' || 
-                            (displayMode === 'triad' && (!isExtendedTone || isSusTone)) ||
-                            (displayMode === 'seventh' && (!isExtendedTone || isSusTone))) {
-                            
+                        const isDimAugTone = ['dim5', 'aug5'].includes(toneType);
+                        const isSeventhTone = toneType === 'seventh';
+                        const isOtherExtendedTone = ['ninth', 'sixth'].includes(toneType);
+                        
+                        let shouldDisplay = false;
+                        
+                        // トライアドモード: ルート、3rd、5th、sus2/sus4、dim5/aug5を表示
+                        if (displayMode === 'triad') {
+                            if (isOtherExtendedTone || isSeventhTone) {
+                                continue; // ninth、sixth、7thはスキップ
+                            }
+                            shouldDisplay = true; // dim5、aug5、sus2、sus4は表示（トライアドの一部）
+                        }
+                        // セブンス含むモード: ルート、3rd、5th、7th、sus2/sus4、dim5/aug5を表示
+                        else if (displayMode === 'seventh') {
+                            if (isOtherExtendedTone) {
+                                continue; // ninth、sixthはスキップ
+                            }
+                            shouldDisplay = true; // 7thは表示（コードに7thが定義されていなくても、ルートに対して7thが存在すれば表示）
+                        }
+                        // 全ポジション: すべて表示
+                        else if (displayMode === 'all') {
+                            shouldDisplay = true;
+                        }
+                        
+                        if (shouldDisplay) {
                             const x = leftMargin + f * fretSpacing;
                             const y = topMargin + s * stringSpacing;
+
+                            // 位置を記録（囲み用）
+                            if (tonePositions[toneType]) {
+                                tonePositions[toneType].push({ x, y, string: s, fret: fretNum });
+                            }
 
                             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                             circle.setAttribute('cx', x);
@@ -416,6 +842,12 @@
                     }
                 }
             }
+
+            // コードトーンを囲む機能（一旦無効化）
+            // const showOutline = document.getElementById('showOutline').checked;
+            // if (showOutline) {
+            //     drawToneOutlines(svg, tonePositions, displayMode, tones);
+            // }
 
             // コード名を表示
             const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -474,6 +906,51 @@
             img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
         }
 
+        // コード選択時に表示モードを更新
+        function updateDisplayModeOptions() {
+            const chord = document.getElementById('chordSelect').value;
+            const tones = chordTones[chord];
+            const allModeOption = document.getElementById('allModeOption');
+            const displayModeSelect = document.getElementById('displayMode');
+            const currentValue = displayModeSelect.value;
+            
+            if (!tones) {
+                allModeOption.style.display = 'none';
+                return;
+            }
+            
+            // 拡張トーン（ninth、sixth）がある場合のみ「全ポジション」を表示
+            const hasExtendedTones = (tones.ninth !== undefined) || (tones.sixth !== undefined);
+            
+            if (hasExtendedTones) {
+                allModeOption.style.display = 'block';
+            } else {
+                allModeOption.style.display = 'none';
+                // 現在「全ポジション」が選択されている場合は「トライアドのみ」に変更
+                if (currentValue === 'all') {
+                    displayModeSelect.value = 'triad';
+                }
+            }
+        }
+        
+        // コード選択のイベントリスナーを設定
+        document.getElementById('chordSelect').addEventListener('change', function() {
+            updateDisplayModeOptions();
+            generateFretboard();
+        });
+        
+        // フレット範囲の変更時に自動生成
+        document.getElementById('startFret').addEventListener('change', generateFretboard);
+        document.getElementById('startFret').addEventListener('input', generateFretboard);
+        document.getElementById('endFret').addEventListener('change', generateFretboard);
+        document.getElementById('endFret').addEventListener('input', generateFretboard);
+        
+        // 表示モードの変更時に自動生成
+        document.getElementById('displayMode').addEventListener('change', generateFretboard);
+        
+        // 初期化時に実行
+        updateDisplayModeOptions();
+        
         // 初期表示
         generateFretboard();
     </script>
