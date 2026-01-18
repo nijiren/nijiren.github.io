@@ -226,6 +226,16 @@
                 </label>
             </label>
             <label>
+                ポジションマーク形状:
+                <select id="positionMarkShape">
+                    <option value="fender" selected>フェンダー（丸）</option>
+                    <option value="gibson">レスポールカスタム（ブロック）</option>
+                    <option value="lespaul">レスポールスタンダード（台形）</option>
+                    <option value="diamond">ダイヤモンド</option>
+                    <option value="rectangle">長方形</option>
+                </select>
+            </label>
+            <label>
                 ポジションマーク濃度:
                 <input type="range" id="positionMarkOpacity" min="0" max="100" value="20" style="width: 100px;">
                 <span id="positionMarkOpacityValue">20%</span>
@@ -953,9 +963,33 @@
             endFretText.textContent = endFret.toString();
             svg.appendChild(endFretText);
             
-            // ポジションマークを描画（3, 5, 7, 9, 12, 15, 17, 19, 21, 24フレット）
-            // 指板の表面（弦と弦の間）に配置（フェンダーギターと同じ見た目）
-            const positionMarks = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
+            // ポジションマークの不透明度をスライダーから取得（0-100の値を0-1に変換）
+            const positionMarkOpacityValue = parseInt(document.getElementById('positionMarkOpacity').value) / 100;
+            // ポジションマークの形状を取得
+            const positionMarkShape = document.getElementById('positionMarkShape').value;
+            
+            // 形状に応じたポジションマークの配置を決定
+            let positionMarks;
+            let isDoubleMarkAt12;
+            
+            if (positionMarkShape === 'gibson') {
+                // レスポールカスタム型：1, 3, 5, 7, 9, 12, 15, 17, 19, 21（24フレットモデルなら24も）
+                // 1フレットにマークがある（13フレットには無い）
+                // 12フレットは1つのマークのみ（フェンダーとは異なる）
+                positionMarks = endFret >= 24 ? [1, 3, 5, 7, 9, 12, 15, 17, 19, 21, 24] : [1, 3, 5, 7, 9, 12, 15, 17, 19, 21];
+                isDoubleMarkAt12 = false;
+            } else if (positionMarkShape === 'lespaul') {
+                // レスポールスタンダード型（台形）：3, 5, 7, 9, 12, 15, 17, 19, 21（24フレットモデルなら24も）
+                // 1フレットにマークは無い（13フレットにも無い）
+                // 12フレットは1つのマークのみ
+                positionMarks = endFret >= 24 ? [3, 5, 7, 9, 12, 15, 17, 19, 21, 24] : [3, 5, 7, 9, 12, 15, 17, 19, 21];
+                isDoubleMarkAt12 = false;
+            } else {
+                // フェンダー型その他：3, 5, 7, 9, 12, 15, 17, 19, 21, 24フレット
+                // 12フレットと24フレットは2つのマーク
+                positionMarks = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
+                isDoubleMarkAt12 = true;
+            }
             
             // ポジションマークの配置位置：弦と弦の間の中央
             // 通常は3弦と4弦の間に配置
@@ -971,40 +1005,150 @@
             const stringIndex3_double = 4; // 5弦
             const markY_double_2 = topMargin + stringIndex3_double * stringSpacing + 8; // 5弦の少し下（5弦にかかる）
             
-            const dotRadius = 16; // サイズを倍に（直径32）
-            // ポジションマークの不透明度をスライダーから取得（0-100の値を0-1に変換）
-            const positionMarkOpacityValue = parseInt(document.getElementById('positionMarkOpacity').value) / 100;
+            // 形状に応じたサイズ
+            let markSize;
+            if (positionMarkShape === 'gibson' || positionMarkShape === 'lespaul') {
+                markSize = 20; // ギブソン型（レスポールカスタム/スタンダード）は大きめ（基本サイズ）
+            } else {
+                markSize = 16; // フェンダー型その他
+            }
+            
+            // ポジションマークを描画する関数
+            const drawPositionMark = (x, y, svg, fretNum = null) => {
+                let element;
+                
+                if (positionMarkShape === 'fender') {
+                    // フェンダー型：丸
+                    element = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    element.setAttribute('cx', x);
+                    element.setAttribute('cy', y);
+                    element.setAttribute('r', markSize);
+                } else if (positionMarkShape === 'gibson') {
+                    // レスポールカスタム型：ブロック（角丸の長方形）
+                    element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    
+                    // 横幅：フレット間隔に合わせる（前のフレットと現在のフレットの間の距離の70%程度）
+                    let width;
+                    if (fretNum !== null && fretNum > 0) {
+                        const currentX = getFretX(fretNum);
+                        const prevX = getFretX(fretNum - 1);
+                        const fretSpacingPx = Math.abs(currentX - prevX);
+                        width = fretSpacingPx * 0.7; // フレット間隔の70%
+                    } else {
+                        // フォールバック（固定幅）
+                        width = markSize * 3;
+                    }
+                    
+                    // 縦幅：2弦/5弦より少し外側に来るサイズ
+                    // 2弦から5弦までの距離 + マージン（上下に余裕を持たせる）
+                    const string2Y = topMargin + 1 * stringSpacing;
+                    const string5Y = topMargin + 4 * stringSpacing;
+                    const baseHeight = string5Y - string2Y; // 2弦から5弦までの距離（3 * stringSpacing）
+                    const height = baseHeight + (stringSpacing * 0.8); // 上下に余裕を持たせる（合計約3.8 * stringSpacing）
+                    
+                    element.setAttribute('x', x - width / 2);
+                    element.setAttribute('y', y - height / 2);
+                    element.setAttribute('width', width);
+                    element.setAttribute('height', height);
+                    element.setAttribute('rx', 4);
+                    element.setAttribute('ry', 4);
+                } else if (positionMarkShape === 'lespaul') {
+                    // レスポールスタンダード型：台形（左側が小さく、右側が大きい、横方向に広がる）
+                    element = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    
+                    // 縦幅：2弦/5弦より少し外側に来るサイズ（回転後は縦方向の高さになる）
+                    const string2Y = topMargin + 1 * stringSpacing;
+                    const string5Y = topMargin + 4 * stringSpacing;
+                    const baseHeight = string5Y - string2Y;
+                    const verticalHeight = baseHeight + (stringSpacing * 0.8); // 回転後の縦方向の高さの基準
+                    // 2弦/5弦から少しはみ出す程度に大きくする
+                    const expandedVerticalHeight = verticalHeight * 1.3; // さらに30%大きく
+                    
+                    // 横幅：フレット間隔に合わせる（前のフレットと現在のフレットの間の距離に基づく）
+                    // 横方向の台形：左側（1フレット側）が大きく、右側（ボディ側）が小さい
+                    // まず縦方向の台形を作成し、90度回転させる
+                    let topWidth;    // 上辺の幅（回転後は右側、小さい）
+                    let bottomWidth; // 下辺の幅（回転後は左側、大きい）
+                    if (fretNum !== null && fretNum > 0) {
+                        const currentX = getFretX(fretNum);
+                        const prevX = getFretX(fretNum - 1);
+                        const fretSpacingPx = Math.abs(currentX - prevX);
+                        bottomWidth = fretSpacingPx * 0.7;  // 下辺はフレット間隔の70%（回転後は左側、大きい）
+                        topWidth = bottomWidth * 0.45;      // 上辺は下辺の45%（回転後は右側、小さい）
+                    } else {
+                        // フォールバック（固定幅）
+                        bottomWidth = markSize * 3;
+                        topWidth = bottomWidth * 0.45;
+                    }
+                    
+                    // 回転前の台形の寸法を設定
+                    // 回転前の「高さ」は、回転後の横方向の幅になる → フレット間隔に基づく値（bottomWidth）を使う
+                    // 回転前の「幅」は、回転後の縦方向の高さになる → topWidth/bottomWidthを使う（台形の上辺と下辺）
+                    const horizontalWidth = bottomWidth; // 回転後の横方向の幅（回転前の高さ、フレット間隔に基づく）
+                    const topY = y - horizontalWidth / 2;    // 上辺（y座標、回転前の高さ）
+                    const bottomY = y + horizontalWidth / 2; // 下辺（y座標）
+                    
+                    // 回転前の台形の幅（回転後の縦方向の高さになる）
+                    // 回転後の縦方向の高さは2弦/5弦から少しはみ出す程度（expandedVerticalHeight）にする
+                    // 台形の上辺と下辺の幅の比率を維持しつつ、全体の高さをexpandedVerticalHeightにする
+                    const topTrapezoidWidth = expandedVerticalHeight * 0.45;  // 上辺の幅（小さい、比率45%）
+                    const bottomTrapezoidWidth = expandedVerticalHeight * 0.7; // 下辺の幅（大きい、比率70%）
+                    
+                    const topLeftX = x - topTrapezoidWidth / 2;   // 左上（上辺の左端、小さい）
+                    const topRightX = x + topTrapezoidWidth / 2;  // 右上（上辺の右端、小さい）
+                    
+                    const bottomLeftX = x - bottomTrapezoidWidth / 2;   // 左下（下辺の左端、大きい）
+                    const bottomRightX = x + bottomTrapezoidWidth / 2;  // 右下（下辺の右端、大きい）
+                    
+                    // 左上→右上→右下→左下の順（時計回り）
+                    // 上辺が小さく、下辺が大きい縦方向の台形
+                    const points = [
+                        `${topLeftX},${topY}`,      // 左上（上辺の左端、小さい）
+                        `${topRightX},${topY}`,     // 右上（上辺の右端、小さい）
+                        `${bottomRightX},${bottomY}`, // 右下（下辺の右端、大きい）
+                        `${bottomLeftX},${bottomY}`   // 左下（下辺の左端、大きい）
+                    ].join(' ');
+                    element.setAttribute('points', points);
+                    
+                    // 90度回転させて横方向の台形にする（左側が大きく、右側が小さい）
+                    element.setAttribute('transform', `rotate(90 ${x} ${y})`);
+                } else if (positionMarkShape === 'diamond') {
+                    // ダイヤモンド型
+                    element = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    const size = markSize * 1.5;
+                    const points = `${x},${y - size} ${x + size},${y} ${x},${y + size} ${x - size},${y}`;
+                    element.setAttribute('points', points);
+                } else if (positionMarkShape === 'rectangle') {
+                    // 長方形型
+                    element = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    const width = markSize * 2;
+                    const height = markSize * 1.2;
+                    element.setAttribute('x', x - width / 2);
+                    element.setAttribute('y', y - height / 2);
+                    element.setAttribute('width', width);
+                    element.setAttribute('height', height);
+                }
+                
+                if (element) {
+                    element.setAttribute('fill', '#bbb');
+                    element.setAttribute('opacity', positionMarkOpacityValue);
+                    svg.appendChild(element);
+                }
+            };
             
             positionMarks.forEach(fretNum => {
                 if (fretNum >= startFret && fretNum <= endFret) {
                     // フレットとフレットの中間位置（実際の押弦位置）に配置
                     const markX = getFretMiddleX(fretNum);
                     
-                    // 12フレットと24フレットは2つのマーク（上下に配置、2弦と5弦にかかる）
-                    if (fretNum === 12 || fretNum === 24) {
-                        const dot1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        dot1.setAttribute('cx', markX);
-                        dot1.setAttribute('cy', markY_double_1);
-                        dot1.setAttribute('r', dotRadius);
-                        dot1.setAttribute('fill', '#bbb');
-                        dot1.setAttribute('opacity', positionMarkOpacityValue);
-                        svg.appendChild(dot1);
-                        
-                        const dot2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        dot2.setAttribute('cx', markX);
-                        dot2.setAttribute('cy', markY_double_2);
-                        dot2.setAttribute('r', dotRadius);
-                        dot2.setAttribute('fill', '#bbb');
-                        dot2.setAttribute('opacity', positionMarkOpacityValue);
-                        svg.appendChild(dot2);
+                    // 12フレットと24フレットの処理（形状に応じて異なる）
+                    if (isDoubleMarkAt12 && (fretNum === 12 || fretNum === 24)) {
+                        // フェンダー型：2つのマーク（上下に配置）
+                        drawPositionMark(markX, markY_double_1, svg, fretNum);
+                        drawPositionMark(markX, markY_double_2, svg, fretNum);
                     } else {
-                        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                        dot.setAttribute('cx', markX);
-                        dot.setAttribute('cy', markYBetween);
-                        dot.setAttribute('r', dotRadius);
-                        dot.setAttribute('fill', '#bbb');
-                        dot.setAttribute('opacity', positionMarkOpacityValue);
-                        svg.appendChild(dot);
+                        // ギブソン型など：1つのマーク（中央に配置）
+                        drawPositionMark(markX, markYBetween, svg, fretNum);
                     }
                 }
             });
@@ -1317,6 +1461,9 @@
         if (legendModeToggle) {
             legendModeToggle.addEventListener('change', generateFretboard);
         }
+        
+        // ポジションマーク形状変更時に自動生成
+        document.getElementById('positionMarkShape').addEventListener('change', generateFretboard);
         
         // ポジションマーク濃度スライダーのイベントリスナー
         const positionMarkOpacitySlider = document.getElementById('positionMarkOpacity');
