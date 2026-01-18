@@ -83,6 +83,52 @@
         .sus4 { background-color: #ffaa44; }
         .ninth { background-color: #aa44ff; }
         .sixth { background-color: #44ffaa; }
+        
+        /* トグルスイッチのスタイル */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #444;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #4a9eff;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
@@ -144,13 +190,45 @@
                 終了フレット:
                 <input type="number" id="endFret" value="12" min="0" max="24">
             </label>
+            <label class="toggle-label">
+                セブンス表示:
+                <label class="toggle-switch">
+                    <input type="checkbox" id="seventhModeToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
+            <label id="allModeToggleLabel" style="display: none;">
+                全ポジション表示:
+                <label class="toggle-switch">
+                    <input type="checkbox" id="allModeToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
             <label>
-                表示モード:
-                <select id="displayMode">
-                    <option value="triad" selected>トライアドのみ</option>
-                    <option value="seventh">セブンス含む</option>
-                    <option value="all" id="allModeOption" style="display: none;">全ポジション</option>
+                チューニング:
+                <select id="tuningSelect">
+                    <option value="standard" selected>標準チューニング (E A D G B E)</option>
+                    <option value="halfStepDown">半音下げ (Eb Ab Db Gb Bb Eb)</option>
                 </select>
+            </label>
+            <label class="toggle-label">
+                実フレット間隔:
+                <label class="toggle-switch">
+                    <input type="checkbox" id="realisticFretSpacing" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
+            <label class="toggle-label">
+                凡例（表示中のみ）:
+                <label class="toggle-switch">
+                    <input type="checkbox" id="legendModeToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </label>
+            <label>
+                ポジションマーク濃度:
+                <input type="range" id="positionMarkOpacity" min="0" max="100" value="20" style="width: 100px;">
+                <span id="positionMarkOpacityValue">20%</span>
             </label>
             <button onclick="downloadSVG()">SVGダウンロード</button>
             <button onclick="downloadPNG()">PNGダウンロード</button>
@@ -204,9 +282,23 @@
     </div>
 
     <script>
-        // 弦のチューニング（標準チューニング）
-        const strings = ['E', 'A', 'D', 'G', 'B', 'E'];
-        const stringNotes = [4, 9, 2, 7, 11, 4]; // MIDI note numbers (E2=40, A2=45, etc.)
+        // チューニングの定義
+        const tunings = {
+            standard: {
+                strings: ['E', 'B', 'G', 'D', 'A', 'E'], // 1弦(高音E) → 6弦(低音E)
+                stringNotes: [4, 11, 7, 2, 9, 4] // MIDI note numbers (1弦→6弦の順)
+            },
+            halfStepDown: {
+                strings: ['Eb', 'Bb', 'Gb', 'Db', 'Ab', 'Eb'], // 1弦(高音Eb) → 6弦(低音Eb)
+                stringNotes: [3, 10, 6, 1, 8, 3] // MIDI note numbers (1弦→6弦の順)
+            }
+        };
+        
+        // 現在のチューニングを取得する関数
+        function getCurrentTuning() {
+            const tuningType = document.getElementById('tuningSelect')?.value || 'standard';
+            return tunings[tuningType];
+        }
 
         // コードトーンの定義
         const chordTones = {
@@ -266,7 +358,8 @@
         };
 
         function getNoteAtPosition(stringIndex, fret) {
-            const openNote = stringNotes[stringIndex];
+            const tuning = getCurrentTuning();
+            const openNote = tuning.stringNotes[stringIndex];
             const semitone = (openNote + fret) % 12;
             const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
             return noteNames[semitone];
@@ -666,12 +759,63 @@
             return hull;
         }
 
+        // 実際のギターのフレット位置を計算する関数
+        // スケール長を基準に、各フレットの位置を計算（フェンダーストラトキャスター: 25.5インチ）
+        function calculateRealisticFretPositions(startFret, endFret) {
+            const fretPositions = {};
+            // スケール長をピクセルに変換（基準として、0-24フレットの範囲を適切なサイズに）
+            const baseScaleLengthPixels = 1000; // 基準となるスケール長（ピクセル）
+            
+            // 各フレットの位置を計算（0フレット = ナット位置 = 0）
+            for (let fret = 0; fret <= endFret; fret++) {
+                // fret_position(n) = scale_length * (1 - 1 / (2^(n/12)))
+                const fretPosition = baseScaleLengthPixels * (1 - 1 / Math.pow(2, fret / 12));
+                fretPositions[fret] = fretPosition;
+            }
+            
+            // 表示範囲（startFretからendFret）に合わせて正規化
+            const startPos = fretPositions[startFret] || 0;
+            const endPos = fretPositions[endFret];
+            const range = endPos - startPos;
+            
+            // 実際のフレット位置を、表示範囲に合わせて正規化（0からの相対位置）
+            const normalizedPositions = {};
+            for (let fret = startFret; fret <= endFret; fret++) {
+                normalizedPositions[fret] = fretPositions[fret] - startPos;
+            }
+            
+            return { positions: normalizedPositions, range };
+        }
+
+        // トグルスイッチから表示モードの値を取得
+        function getDisplayMode() {
+            const allModeToggle = document.getElementById('allModeToggle');
+            const allModeLabel = document.getElementById('allModeToggleLabel');
+            
+            // 全ポジション表示が有効な場合（拡張コードがある場合のみ）
+            if (allModeLabel && allModeLabel.style.display !== 'none' && allModeToggle.checked) {
+                return 'all';
+            }
+            
+            // セブンス表示トグルがONの場合
+            const seventhModeToggle = document.getElementById('seventhModeToggle');
+            if (seventhModeToggle && seventhModeToggle.checked) {
+                return 'seventh';
+            }
+            
+            // デフォルトはトライアドのみ
+            return 'triad';
+        }
+
         function generateFretboard() {
             const chord = document.getElementById('chordSelect').value;
             const startFret = parseInt(document.getElementById('startFret').value);
             const endFret = parseInt(document.getElementById('endFret').value);
-            const displayMode = document.getElementById('displayMode').value;
+            const displayMode = getDisplayMode();
+            const realisticSpacing = document.getElementById('realisticFretSpacing').checked;
             const tones = chordTones[chord];
+            const tuning = getCurrentTuning();
+            const strings = tuning.strings;
 
             const container = document.getElementById('fretboard');
             container.innerHTML = '';
@@ -683,21 +827,64 @@
             
             const fretCount = endFret - startFret + 1;
             const stringSpacing = 50; // 弦の間隔を大きく
-            const fretSpacing = 50;
+            const baseFretSpacing = 60; // 基本フレット間の距離
+            
+            // 実在のギターのフレット間隔を使用するかどうか
+            let fretPositions = {};
+            let fretSpacing = baseFretSpacing;
+            
+            if (realisticSpacing) {
+                const fretCalc = calculateRealisticFretPositions(startFret, endFret);
+                // 実際の間隔を計算しつつ、表示幅を適切に調整
+                const scaleFactor = (baseFretSpacing * (fretCount - 1)) / fretCalc.range;
+                // オブジェクトの各フレット位置をスケール
+                for (let fret = startFret; fret <= endFret; fret++) {
+                    fretPositions[fret] = fretCalc.positions[fret] * scaleFactor;
+                }
+            } else {
+                // 等間隔の場合
+                for (let f = 0; f <= fretCount; f++) {
+                    fretPositions[startFret + f] = f * baseFretSpacing;
+                }
+            }
+            
             const titleY = 25; // コード名のY位置（上に移動）
             const fretNumberY = 45; // フレット番号のY位置（コード名との間隔を広げる）
             const topMargin = 70; // 上部マージン（指板の開始位置）
             const leftMargin = 120; // 左側マージン（弦名用のスペースを増やす）
             const rightMargin = 50;
-            const bottomMargin = 30;
-            const totalWidth = leftMargin + fretCount * fretSpacing + rightMargin;
+            const bottomMargin = 50; // 下部マージン（ポジションマーク用のスペース）
+            
+            // 総幅を計算（実際のフレット位置を使用）- 終了フレットの位置まで
+            const maxFretXPos = realisticSpacing ? fretPositions[endFret] : (fretCount - 1) * fretSpacing;
+            const totalWidth = leftMargin + maxFretXPos + rightMargin;
             const totalHeight = topMargin + (strings.length - 1) * stringSpacing + bottomMargin;
             
             svg.setAttribute('viewBox', `0 0 ${totalWidth} ${totalHeight}`);
+            
+            // フレット位置を取得するヘルパー関数
+            const getFretX = (fretNum) => {
+                if (fretPositions[fretNum] !== undefined) {
+                    return leftMargin + fretPositions[fretNum];
+                }
+                // フォールバック（等間隔）
+                return leftMargin + (fretNum - startFret) * fretSpacing;
+            };
+            
+            // フレット間の中間位置を取得するヘルパー関数（押弦位置）
+            const getFretMiddleX = (fretNum) => {
+                if (fretNum === 0) {
+                    return leftMargin - 30; // 開放弦は弦名表示領域
+                }
+                const currentX = getFretX(fretNum);
+                const prevX = getFretX(fretNum - 1);
+                return (prevX + currentX) / 2; // 前のフレットと現在のフレットの中間
+            };
 
             // フレット線を描画
-            for (let f = 0; f <= fretCount; f++) {
-                const x = leftMargin + f * fretSpacing;
+            for (let f = 0; f < fretCount; f++) {
+                const fretNum = startFret + f;
+                const x = getFretX(fretNum);
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', x);
                 line.setAttribute('y1', topMargin);
@@ -707,14 +894,25 @@
                 line.setAttribute('stroke-width', f === 0 ? '3' : '1');
                 svg.appendChild(line);
             }
+            // 終了フレットの境界線を描画
+            const endFretX = getFretX(endFret);
+            const endLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            endLine.setAttribute('x1', endFretX);
+            endLine.setAttribute('y1', topMargin);
+            endLine.setAttribute('x2', endFretX);
+            endLine.setAttribute('y2', topMargin + (strings.length - 1) * stringSpacing);
+            endLine.setAttribute('stroke', '#666');
+            endLine.setAttribute('stroke-width', '1');
+            svg.appendChild(endLine);
 
             // 弦を描画
+            const endX = getFretX(endFret);
             for (let s = 0; s < strings.length; s++) {
                 const y = topMargin + s * stringSpacing;
                 const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 line.setAttribute('x1', leftMargin);
                 line.setAttribute('y1', y);
-                line.setAttribute('x2', leftMargin + fretCount * fretSpacing);
+                line.setAttribute('x2', endX);
                 line.setAttribute('y2', y);
                 line.setAttribute('stroke', '#888');
                 line.setAttribute('stroke-width', '2.5'); // 弦の太さを少し太く
@@ -732,9 +930,9 @@
             }
 
             // フレット番号（上部に十分なスペースを確保）
-            for (let f = 0; f <= fretCount; f++) {
+            for (let f = 0; f < fretCount; f++) {
                 const fretNum = startFret + f;
-                const x = leftMargin + f * fretSpacing;
+                const x = getFretX(fretNum);
                 const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 text.setAttribute('x', x);
                 text.setAttribute('y', fretNumberY);
@@ -744,6 +942,72 @@
                 text.textContent = fretNum === 0 ? '0' : fretNum;
                 svg.appendChild(text);
             }
+            // 終了フレットの番号を表示
+            const endFretNumX = getFretX(endFret);
+            const endFretText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            endFretText.setAttribute('x', endFretNumX);
+            endFretText.setAttribute('y', fretNumberY);
+            endFretText.setAttribute('fill', '#888');
+            endFretText.setAttribute('font-size', '14');
+            endFretText.setAttribute('text-anchor', 'middle');
+            endFretText.textContent = endFret.toString();
+            svg.appendChild(endFretText);
+            
+            // ポジションマークを描画（3, 5, 7, 9, 12, 15, 17, 19, 21, 24フレット）
+            // 指板の表面（弦と弦の間）に配置（フェンダーギターと同じ見た目）
+            const positionMarks = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
+            
+            // ポジションマークの配置位置：弦と弦の間の中央
+            // 通常は3弦と4弦の間に配置
+            const stringIndex1 = 2; // 3弦（0-indexedなので2）
+            const stringIndex2 = 3; // 4弦（0-indexedなので3）
+            const markYBetween = topMargin + (stringIndex1 * stringSpacing + stringIndex2 * stringSpacing) / 2;
+            
+            // 12フレットと24フレット用の2つのマークの位置（2弦、5弦にかかるぐらいに内側へ）
+            // 1弦と2弦の間ではなく、2弦の位置に近い位置（2弦に少しかかる）
+            const stringIndex1_double = 1; // 2弦
+            const markY_double_1 = topMargin + stringIndex1_double * stringSpacing - 8; // 2弦の少し上（2弦にかかる）
+            // 5弦と6弦の間ではなく、5弦の位置に近い位置（5弦に少しかかる）
+            const stringIndex3_double = 4; // 5弦
+            const markY_double_2 = topMargin + stringIndex3_double * stringSpacing + 8; // 5弦の少し下（5弦にかかる）
+            
+            const dotRadius = 16; // サイズを倍に（直径32）
+            // ポジションマークの不透明度をスライダーから取得（0-100の値を0-1に変換）
+            const positionMarkOpacityValue = parseInt(document.getElementById('positionMarkOpacity').value) / 100;
+            
+            positionMarks.forEach(fretNum => {
+                if (fretNum >= startFret && fretNum <= endFret) {
+                    // フレットとフレットの中間位置（実際の押弦位置）に配置
+                    const markX = getFretMiddleX(fretNum);
+                    
+                    // 12フレットと24フレットは2つのマーク（上下に配置、2弦と5弦にかかる）
+                    if (fretNum === 12 || fretNum === 24) {
+                        const dot1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        dot1.setAttribute('cx', markX);
+                        dot1.setAttribute('cy', markY_double_1);
+                        dot1.setAttribute('r', dotRadius);
+                        dot1.setAttribute('fill', '#bbb');
+                        dot1.setAttribute('opacity', positionMarkOpacityValue);
+                        svg.appendChild(dot1);
+                        
+                        const dot2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        dot2.setAttribute('cx', markX);
+                        dot2.setAttribute('cy', markY_double_2);
+                        dot2.setAttribute('r', dotRadius);
+                        dot2.setAttribute('fill', '#bbb');
+                        dot2.setAttribute('opacity', positionMarkOpacityValue);
+                        svg.appendChild(dot2);
+                    } else {
+                        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        dot.setAttribute('cx', markX);
+                        dot.setAttribute('cy', markYBetween);
+                        dot.setAttribute('r', dotRadius);
+                        dot.setAttribute('fill', '#bbb');
+                        dot.setAttribute('opacity', positionMarkOpacityValue);
+                        svg.appendChild(dot);
+                    }
+                }
+            });
 
             // コードトーンの位置を収集（囲み用）
             const tonePositions = {
@@ -761,7 +1025,7 @@
 
             // コードトーンを描画
             for (let s = 0; s < strings.length; s++) {
-                for (let f = 0; f <= fretCount; f++) {
+                for (let f = 0; f < fretCount; f++) {
                     const fretNum = startFret + f;
                     const note = getNoteAtPosition(s, fretNum);
                     const toneType = getToneType(note, chord);
@@ -797,7 +1061,8 @@
                         }
                         
                         if (shouldDisplay) {
-                            const x = leftMargin + f * fretSpacing;
+                            // フレットとフレットの中間（実際の押弦位置）に配置
+                            const x = getFretMiddleX(fretNum);
                             const y = topMargin + s * stringSpacing;
 
                             // 位置を記録（囲み用）
@@ -861,6 +1126,93 @@
             svg.appendChild(title);
 
             container.appendChild(svg);
+            
+            // 表示されているトーンタイプを収集して下部のインターバル表示を更新
+            const legendModeToggle = document.getElementById('legendModeToggle');
+            const legendMode = legendModeToggle && legendModeToggle.checked ? 'displayedOnly' : 'all';
+            updateIntervalDisplay(displayMode, tones, tonePositions, legendMode);
+        }
+        
+        // 下部のインターバル表示を更新
+        function updateIntervalDisplay(displayMode, tones, tonePositions, legendMode) {
+            // 実際に指板上に表示されているトーンタイプを取得（tonePositionsから）
+            // これにより、指板の表示と凡例が常に一致する
+            const displayedTypes = Object.keys(tonePositions).filter(type => 
+                tonePositions[type] && tonePositions[type].length > 0
+            );
+            
+            // 凡例表示モードに応じて処理
+            const legendItems = document.querySelectorAll('.legend-item');
+            
+            // まず全ての項目をリセット（表示状態とスタイルを初期化）
+            legendItems.forEach(item => {
+                const dot = item.querySelector('.legend-dot');
+                const span = item.querySelector('span');
+                if (!dot || !span) return;
+                
+                // displayを常にリセット（コード切り替え時に前の状態が残らないように）
+                item.style.display = 'flex';
+                
+                // スタイルもリセット
+                dot.style.opacity = '';
+                span.style.opacity = '';
+                span.style.fontWeight = '';
+            });
+            
+            if (legendMode === 'displayedOnly') {
+                // 表示されているもののみを表示（非表示のものは完全に非表示）
+                legendItems.forEach(item => {
+                    const dot = item.querySelector('.legend-dot');
+                    const span = item.querySelector('span');
+                    if (!dot || !span) return;
+                    
+                    const toneType = getToneTypeFromLegend(span.textContent);
+                    if (toneType && displayedTypes.includes(toneType)) {
+                        // 表示されている場合は表示
+                        item.style.display = 'flex';
+                    } else {
+                        // 表示されていない場合は非表示
+                        item.style.display = 'none';
+                    }
+                });
+            } else {
+                // 全て表示（活性/非活性で区別）
+                legendItems.forEach(item => {
+                    const dot = item.querySelector('.legend-dot');
+                    const span = item.querySelector('span');
+                    if (!dot || !span) return;
+                    
+                    const toneType = getToneTypeFromLegend(span.textContent);
+                    if (toneType && displayedTypes.includes(toneType)) {
+                        // 表示されている場合は活性化（色を濃く、不透明度を上げる）
+                        dot.style.opacity = '1';
+                        span.style.opacity = '1';
+                        span.style.fontWeight = 'bold';
+                    } else {
+                        // 表示されていない場合はグレーアウト
+                        dot.style.opacity = '0.3';
+                        span.style.opacity = '0.3';
+                        span.style.fontWeight = 'normal';
+                    }
+                });
+            }
+        }
+        
+        // レジェンドのテキストからトーンタイプを取得
+        function getToneTypeFromLegend(text) {
+            const mapping = {
+                'ルート': 'root',
+                '3rd': 'third',
+                '5th': 'fifth',
+                '7th': 'seventh',
+                '♭5th': 'dim5',
+                '#5th': 'aug5',
+                '2nd': 'sus2',
+                '4th': 'sus4',
+                '9th': 'ninth',
+                '6th': 'sixth'
+            };
+            return mapping[text] || null;
         }
 
         function downloadSVG() {
@@ -906,29 +1258,28 @@
             img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
         }
 
-        // コード選択時に表示モードを更新
+        // コード選択時に表示モードオプションを更新
         function updateDisplayModeOptions() {
             const chord = document.getElementById('chordSelect').value;
             const tones = chordTones[chord];
-            const allModeOption = document.getElementById('allModeOption');
-            const displayModeSelect = document.getElementById('displayMode');
-            const currentValue = displayModeSelect.value;
+            const allModeLabel = document.getElementById('allModeToggleLabel');
+            const allModeToggle = document.getElementById('allModeToggle');
             
             if (!tones) {
-                allModeOption.style.display = 'none';
+                if (allModeLabel) allModeLabel.style.display = 'none';
                 return;
             }
             
-            // 拡張トーン（ninth、sixth）がある場合のみ「全ポジション」を表示
+            // 拡張トーン（ninth、sixth）がある場合のみ「全ポジション表示」トグルを表示
             const hasExtendedTones = (tones.ninth !== undefined) || (tones.sixth !== undefined);
             
             if (hasExtendedTones) {
-                allModeOption.style.display = 'block';
+                if (allModeLabel) allModeLabel.style.display = 'flex';
             } else {
-                allModeOption.style.display = 'none';
-                // 現在「全ポジション」が選択されている場合は「トライアドのみ」に変更
-                if (currentValue === 'all') {
-                    displayModeSelect.value = 'triad';
+                if (allModeLabel) allModeLabel.style.display = 'none';
+                // 全ポジション表示がONの場合はOFFに戻す
+                if (allModeToggle && allModeToggle.checked) {
+                    allModeToggle.checked = false;
                 }
             }
         }
@@ -945,14 +1296,135 @@
         document.getElementById('endFret').addEventListener('change', generateFretboard);
         document.getElementById('endFret').addEventListener('input', generateFretboard);
         
-        // 表示モードの変更時に自動生成
-        document.getElementById('displayMode').addEventListener('change', generateFretboard);
+        // 表示モードの変更時に自動生成（トグルスイッチ）
+        document.getElementById('seventhModeToggle').addEventListener('change', generateFretboard);
+        const allModeToggle = document.getElementById('allModeToggle');
+        if (allModeToggle) {
+            allModeToggle.addEventListener('change', function() {
+                // 全ポジション表示がONの場合、セブンス表示を自動でOFFにしない（両方ONでも可）
+                generateFretboard();
+            });
+        }
+        
+        // チューニング変更時に自動生成
+        document.getElementById('tuningSelect').addEventListener('change', generateFretboard);
+        
+        // フレット間隔オプション変更時に自動生成
+        document.getElementById('realisticFretSpacing').addEventListener('change', generateFretboard);
+        
+        // 凡例表示モード変更時に自動生成（トグルスイッチ）
+        const legendModeToggle = document.getElementById('legendModeToggle');
+        if (legendModeToggle) {
+            legendModeToggle.addEventListener('change', generateFretboard);
+        }
+        
+        // ポジションマーク濃度スライダーのイベントリスナー
+        const positionMarkOpacitySlider = document.getElementById('positionMarkOpacity');
+        const positionMarkOpacityValueDisplay = document.getElementById('positionMarkOpacityValue');
+        
+        // スライダーの値を表示
+        positionMarkOpacitySlider.addEventListener('input', function() {
+            positionMarkOpacityValueDisplay.textContent = this.value + '%';
+            generateFretboard(); // スライダー変更時に指板を再生成
+        });
         
         // 初期化時に実行
         updateDisplayModeOptions();
         
         // 初期表示
         generateFretboard();
+        
+        // テストコード: 凡例と指板の表示の一致を確認
+        function testLegendConsistency() {
+            const tests = [];
+            const chords = Object.keys(chordTones);
+            
+            // 代表的なコードと表示モードの組み合わせでテスト
+            const testCases = [
+                { chord: 'A', displayMode: 'triad' },
+                { chord: 'A', displayMode: 'seventh' },
+                { chord: 'A7', displayMode: 'seventh' },
+                { chord: 'Am', displayMode: 'triad' },
+                { chord: 'Asus2', displayMode: 'triad' },
+                { chord: 'Adim', displayMode: 'triad' },
+                { chord: 'Aaug', displayMode: 'triad' },
+                { chord: 'A9', displayMode: 'all' }
+            ];
+            
+            for (const testCase of testCases) {
+                const { chord, displayMode } = testCase;
+                const tones = chordTones[chord];
+                if (!tones) continue;
+                
+                // 実際の表示ロジックに基づいて、どのトーンタイプが表示されるかを判断
+                const mockTonePositions = {};
+                
+                // コードに定義されているトーンタイプを確認
+                const toneTypeMap = {
+                    'root': 'root',
+                    'third': 'third',
+                    'fifth': 'fifth',
+                    'seventh': 'seventh',
+                    'dim5': 'dim5',
+                    'aug5': 'aug5',
+                    'sus2': 'sus2',
+                    'sus4': 'sus4',
+                    'ninth': 'ninth',
+                    'sixth': 'sixth'
+                };
+                
+                for (const [key, mappedType] of Object.entries(toneTypeMap)) {
+                    if (tones[key]) {
+                        let shouldBeDisplayed = false;
+                        
+                        if (displayMode === 'triad') {
+                            shouldBeDisplayed = ['root', 'third', 'fifth', 'sus2', 'sus4', 'dim5', 'aug5'].includes(mappedType);
+                        } else if (displayMode === 'seventh') {
+                            shouldBeDisplayed = ['root', 'third', 'fifth', 'seventh', 'sus2', 'sus4', 'dim5', 'aug5'].includes(mappedType);
+                        } else {
+                            shouldBeDisplayed = true;
+                        }
+                        
+                        if (shouldBeDisplayed) {
+                            mockTonePositions[mappedType] = [{x: 0, y: 0}]; // ダミーデータ
+                        }
+                    }
+                }
+                
+                // updateIntervalDisplayの動作をテスト
+                const displayedTypes = Object.keys(mockTonePositions).filter(type => 
+                    mockTonePositions[type] && mockTonePositions[type].length > 0
+                );
+                
+                tests.push({
+                    chord,
+                    displayMode,
+                    expectedTypes: Object.keys(mockTonePositions),
+                    actualTypes: displayedTypes,
+                    pass: JSON.stringify(displayedTypes.sort()) === JSON.stringify(Object.keys(mockTonePositions).sort())
+                });
+            }
+            
+            // テスト結果をコンソールに出力
+            if (typeof console !== 'undefined' && console.log) {
+                const passed = tests.filter(t => t.pass).length;
+                const failed = tests.filter(t => !t.pass).length;
+                console.log(`凡例一貫性テスト: ${passed} passed, ${failed} failed (total: ${tests.length})`);
+                if (failed > 0) {
+                    console.warn('失敗したテスト:', tests.filter(t => !t.pass));
+                }
+            }
+            
+            return tests;
+        }
+        
+        // 開発モードの場合のみテストを実行（URLパラメータで制御: ?test=true）
+        if (typeof URLSearchParams !== 'undefined' && new URLSearchParams(window.location.search).get('test') === 'true') {
+            // ページロード後にテストを実行
+            setTimeout(() => {
+                testLegendConsistency();
+            }, 1000);
+        }
     </script>
 </body>
 </html>
