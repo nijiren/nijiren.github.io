@@ -240,6 +240,40 @@
                 <input type="range" id="positionMarkOpacity" min="0" max="100" value="20" style="width: 100px;">
                 <span id="positionMarkOpacityValue">20%</span>
             </label>
+            <label>
+                スケールキー:
+                <select id="scaleKey">
+                    <option value="C">C</option>
+                    <option value="C#">C#</option>
+                    <option value="Db">Db</option>
+                    <option value="D">D</option>
+                    <option value="D#">D#</option>
+                    <option value="Eb">Eb</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="F#">F#</option>
+                    <option value="Gb">Gb</option>
+                    <option value="G">G</option>
+                    <option value="G#">G#</option>
+                    <option value="Ab">Ab</option>
+                    <option value="A">A</option>
+                    <option value="A#">A#</option>
+                    <option value="Bb">Bb</option>
+                    <option value="B">B</option>
+                </select>
+            </label>
+            <label>
+                スケールタイプ:
+                <select id="scaleType">
+                    <option value="none">なし</option>
+                    <option value="major">メジャースケール</option>
+                    <option value="minor">ナチュラルマイナースケール</option>
+                    <option value="pentatonicMajor">メジャーペンタトニック</option>
+                    <option value="pentatonicMinor">マイナーペンタトニック</option>
+                    <option value="dorian">ドリアンスケール</option>
+                    <option value="mixolydian">ミクソリディアンスケール</option>
+                </select>
+            </label>
             <button onclick="downloadSVG()">SVGダウンロード</button>
             <button onclick="downloadPNG()">PNGダウンロード</button>
         </div>
@@ -310,6 +344,35 @@
             return tunings[tuningType];
         }
 
+        // スケールの定義（半音数の配列）
+        const scalePatterns = {
+            major: [0, 2, 4, 5, 7, 9, 11], // メジャースケール
+            minor: [0, 2, 3, 5, 7, 8, 10], // ナチュラルマイナースケール
+            pentatonicMajor: [0, 2, 4, 7, 9], // メジャーペンタトニック
+            pentatonicMinor: [0, 3, 5, 7, 10], // マイナーペンタトニック
+            dorian: [0, 2, 3, 5, 7, 9, 10], // ドリアンスケール
+            mixolydian: [0, 2, 4, 5, 7, 9, 10] // ミクソリディアンスケール
+        };
+        
+        // スケールトーンを取得する関数
+        function getScaleNotes(key, scaleType) {
+            if (!scaleType || scaleType === 'none') return [];
+            
+            const pattern = scalePatterns[scaleType];
+            if (!pattern) return [];
+            
+            const keySemitone = noteToSemitone[key];
+            if (keySemitone === undefined) return [];
+            
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const scaleNotes = pattern.map(interval => {
+                const semitone = (keySemitone + interval) % 12;
+                return noteNames[semitone];
+            });
+            
+            return scaleNotes;
+        }
+        
         // コードトーンの定義
         const chordTones = {
             // メジャー/マイナー
@@ -1153,6 +1216,86 @@
                 }
             });
 
+            // コードトーンの位置を先に収集（重なり判定用）
+            const chordToneMap = new Map(); // key: "string-fret", value: toneType
+            for (let s = 0; s < strings.length; s++) {
+                for (let f = 0; f < fretCount; f++) {
+                    const fretNum = startFret + f;
+                    const note = getNoteAtPosition(s, fretNum);
+                    const toneType = getToneType(note, chord);
+                    
+                    if (toneType) {
+                        // 表示モードのチェック
+                        const isSusTone = ['sus2', 'sus4'].includes(toneType);
+                        const isDimAugTone = ['dim5', 'aug5'].includes(toneType);
+                        const isSeventhTone = toneType === 'seventh';
+                        const isOtherExtendedTone = ['ninth', 'sixth'].includes(toneType);
+                        
+                        let shouldDisplay = false;
+                        
+                        if (displayMode === 'triad') {
+                            if (isOtherExtendedTone || isSeventhTone) {
+                                continue;
+                            }
+                            shouldDisplay = true;
+                        } else if (displayMode === 'seventh') {
+                            if (isOtherExtendedTone) {
+                                continue;
+                            }
+                            shouldDisplay = true;
+                        } else if (displayMode === 'all') {
+                            shouldDisplay = true;
+                        }
+                        
+                        if (shouldDisplay) {
+                            const key = `${s}-${fretNum}`;
+                            chordToneMap.set(key, toneType);
+                        }
+                    }
+                }
+            }
+            
+            // スケールトーンを描画（コードトーンの後ろのレイヤー）
+            const scaleKey = document.getElementById('scaleKey')?.value || 'C';
+            const scaleType = document.getElementById('scaleType')?.value || 'none';
+            const scaleNotes = getScaleNotes(scaleKey, scaleType);
+            
+            // スケールトーンを描画
+            if (scaleNotes.length > 0) {
+                for (let s = 0; s < strings.length; s++) {
+                    for (let f = 0; f < fretCount; f++) {
+                        const fretNum = startFret + f;
+                        const note = getNoteAtPosition(s, fretNum);
+                        
+                        // スケールに含まれるかチェック（異名同音も考慮）
+                        const isScaleNote = scaleNotes.some(scaleNote => 
+                            note === scaleNote || isEnharmonicEquivalent(note, scaleNote)
+                        );
+                        
+                        if (isScaleNote) {
+                            const x = getFretMiddleX(fretNum);
+                            const y = topMargin + s * stringSpacing;
+                            const key = `${s}-${fretNum}`;
+                            const chordToneType = chordToneMap.get(key);
+                            
+                            // コードトーンと重なっていない場合は白丸で表示
+                            if (!chordToneType) {
+                                // 重なっていない場合は白丸で表示
+                                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                                circle.setAttribute('cx', x);
+                                circle.setAttribute('cy', y);
+                                circle.setAttribute('r', '12');
+                                circle.setAttribute('fill', '#fff');
+                                circle.setAttribute('stroke', '#fff');
+                                circle.setAttribute('stroke-width', '1');
+                                circle.setAttribute('opacity', '0.8');
+                                svg.appendChild(circle);
+                            }
+                        }
+                    }
+                }
+            }
+
             // コードトーンの位置を収集（囲み用）
             const tonePositions = {
                 root: [],
@@ -1214,6 +1357,12 @@
                                 tonePositions[toneType].push({ x, y, string: s, fret: fretNum });
                             }
 
+                            // スケールトーンと重なっているかチェック
+                            const key = `${s}-${fretNum}`;
+                            const isScaleNote = scaleNotes.length > 0 && scaleNotes.some(scaleNote => 
+                                note === scaleNote || isEnharmonicEquivalent(note, scaleNote)
+                            );
+                            
                             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                             circle.setAttribute('cx', x);
                             circle.setAttribute('cy', y);
@@ -1232,16 +1381,40 @@
                                 'sixth': '#44ffaa'
                             };
                             
-                            circle.setAttribute('fill', colors[toneType]);
-                            circle.setAttribute('stroke', '#fff');
-                            circle.setAttribute('stroke-width', '2');
+                            // スケールトーンと重なっている場合の処理
+                            if (isScaleNote) {
+                                if (toneType === 'root') {
+                                    // トライアドのルートと重なった場合：白の塗りつぶし、赤の枠
+                                    circle.setAttribute('fill', '#fff');
+                                    circle.setAttribute('stroke', '#ff4444');
+                                    circle.setAttribute('stroke-width', '4');
+                                } else {
+                                    // トライアドのルート以外と重なった場合：通常の色、太い枠
+                                    circle.setAttribute('fill', colors[toneType]);
+                                    circle.setAttribute('stroke', '#fff');
+                                    circle.setAttribute('stroke-width', '4');
+                                }
+                            } else {
+                                // 重なっていない場合：通常の表示
+                                circle.setAttribute('fill', colors[toneType]);
+                                circle.setAttribute('stroke', '#fff');
+                                circle.setAttribute('stroke-width', '2');
+                            }
+                            
                             svg.appendChild(circle);
 
                             // 音名を表示
                             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                             text.setAttribute('x', x);
                             text.setAttribute('y', y + 5);
-                            text.setAttribute('fill', '#000');
+                            
+                            // スケールトーンと重なっている場合、ルートの場合は文字色を黒に
+                            if (isScaleNote && toneType === 'root') {
+                                text.setAttribute('fill', '#000');
+                            } else {
+                                text.setAttribute('fill', '#000');
+                            }
+                            
                             text.setAttribute('font-size', '11');
                             text.setAttribute('font-weight', 'bold');
                             text.setAttribute('text-anchor', 'middle');
@@ -1474,6 +1647,10 @@
             positionMarkOpacityValueDisplay.textContent = this.value + '%';
             generateFretboard(); // スライダー変更時に指板を再生成
         });
+        
+        // スケールキーとスケールタイプの変更時に自動生成
+        document.getElementById('scaleKey').addEventListener('change', generateFretboard);
+        document.getElementById('scaleType').addEventListener('change', generateFretboard);
         
         // 初期化時に実行
         updateDisplayModeOptions();
