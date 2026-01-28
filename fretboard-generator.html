@@ -136,49 +136,53 @@
         <h1>指板図ジェネレーター</h1>
         <div class="controls">
             <label>
-                コード:
-                <select id="chordSelect">
-                    <optgroup label="メジャー/マイナー">
-                        <option value="A">A (A, C#, E)</option>
-                        <option value="Am">Am (A, C, E)</option>
-                        <option value="A7">A7 (A, C#, E, G)</option>
-                        <option value="D">D (D, F#, A)</option>
-                        <option value="Dm">Dm (D, F, A)</option>
-                        <option value="D7">D7 (D, F#, A, C)</option>
-                        <option value="E">E (E, G#, B)</option>
-                        <option value="Em">Em (E, G, B)</option>
-                        <option value="E7">E7 (E, G#, B, D)</option>
-                        <option value="G">G (G, B, D)</option>
-                        <option value="Gm">Gm (G, Bb, D)</option>
-                        <option value="C">C (C, E, G)</option>
+                キー:
+                <select id="keySelect">
+                    <option value="C">C</option>
+                    <option value="C#">C# / Db</option>
+                    <option value="D">D</option>
+                    <option value="D#">D# / Eb</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="F#">F# / Gb</option>
+                    <option value="G">G</option>
+                    <option value="G#">G# / Ab</option>
+                    <option value="A" selected>A</option>
+                    <option value="A#">A# / Bb</option>
+                    <option value="B">B</option>
+                </select>
+            </label>
+            <label>
+                コード種別:
+                <select id="chordTypeSelect">
+                    <optgroup label="基本">
+                        <option value="major" selected>メジャー</option>
+                        <option value="minor">マイナー</option>
+                        <option value="7">7th (ドミナント)</option>
+                        <option value="m7">m7 (マイナー7th)</option>
+                        <option value="maj7">maj7 (メジャー7th)</option>
                     </optgroup>
-                    <optgroup label="ディミニッシュ">
-                        <option value="Adim">Adim (A, C, Eb)</option>
-                        <option value="Adim7">Adim7 (A, C, Eb, Gb)</option>
-                        <option value="Ddim">Ddim (D, F, Ab)</option>
-                        <option value="Ddim7">Ddim7 (D, F, Ab, B)</option>
-                        <option value="Edim">Edim (E, G, Bb)</option>
-                        <option value="Edim7">Edim7 (E, G, Bb, Db)</option>
-                    </optgroup>
-                    <optgroup label="オーグメント">
-                        <option value="Aaug">Aaug (A, C#, F)</option>
-                        <option value="Daug">Daug (D, F#, A#)</option>
-                        <option value="Eaug">Eaug (E, G#, C)</option>
+                    <optgroup label="ディミニッシュ/オーグメント">
+                        <option value="dim">dim (ディミニッシュ)</option>
+                        <option value="dim7">dim7 (ディミニッシュ7th)</option>
+                        <option value="m7b5">m7(b5) (ハーフディミニッシュ)</option>
+                        <option value="aug">aug (オーグメント)</option>
                     </optgroup>
                     <optgroup label="サスペンド">
-                        <option value="Asus2">Asus2 (A, B, E)</option>
-                        <option value="Asus4">Asus4 (A, D, E)</option>
-                        <option value="Dsus2">Dsus2 (D, E, A)</option>
-                        <option value="Dsus4">Dsus4 (D, G, A)</option>
-                        <option value="Esus2">Esus2 (E, F#, B)</option>
-                        <option value="Esus4">Esus4 (E, A, B)</option>
+                        <option value="sus2">sus2</option>
+                        <option value="sus4">sus4</option>
+                        <option value="7sus4">7sus4</option>
+                    </optgroup>
+                    <optgroup label="6th">
+                        <option value="6">6</option>
+                        <option value="m6">m6</option>
                     </optgroup>
                     <optgroup label="拡張コード">
-                        <option value="Aadd9">Aadd9 (A, C#, E, B)</option>
-                        <option value="A9">A9 (A, C#, E, G, B)</option>
-                        <option value="Am7">Am7 (A, C, E, G)</option>
-                        <option value="Amaj7">Amaj7 (A, C#, E, G#)</option>
-                        <option value="A6">A6 (A, C#, E, F#)</option>
+                        <option value="add9">add9</option>
+                        <option value="madd9">m(add9)</option>
+                        <option value="9">9</option>
+                        <option value="m9">m9</option>
+                        <option value="maj9">maj9</option>
                     </optgroup>
                 </select>
             </label>
@@ -239,6 +243,19 @@
                 ポジションマーク濃度:
                 <input type="range" id="positionMarkOpacity" min="0" max="100" value="20" style="width: 100px;">
                 <span id="positionMarkOpacityValue">20%</span>
+            </label>
+            <label>
+                ポジションマーク色:
+                <select id="positionMarkColor">
+                    <option value="#bbb">ライトグレー (現在)</option>
+                    <option value="#888">ミディアムグレー</option>
+                    <option value="#6a5a4a">ローズウッド</option>
+                    <option value="#5a6a6a">ダークティール</option>
+                    <option value="#6a5a7a">ダークパープル</option>
+                    <option value="#7a6a3a">ゴールド/アンバー</option>
+                    <option value="#5a3a3a">ダークレッド</option>
+                    <option value="#3a5a4a">ダークグリーン</option>
+                </select>
             </label>
             <label>
                 スケールキー:
@@ -374,45 +391,76 @@
         }
         
         // コードトーンの定義
-        const chordTones = {
-            // メジャー/マイナー
-            'A': { root: 'A', third: 'C#', fifth: 'E' },
-            'Am': { root: 'A', third: 'C', fifth: 'E' },
-            'A7': { root: 'A', third: 'C#', fifth: 'E', seventh: 'G' },
-            'Am7': { root: 'A', third: 'C', fifth: 'E', seventh: 'G' },
-            'Amaj7': { root: 'A', third: 'C#', fifth: 'E', seventh: 'G#' },
-            'D': { root: 'D', third: 'F#', fifth: 'A' },
-            'Dm': { root: 'D', third: 'F', fifth: 'A' },
-            'D7': { root: 'D', third: 'F#', fifth: 'A', seventh: 'C' },
-            'E': { root: 'E', third: 'G#', fifth: 'B' },
-            'Em': { root: 'E', third: 'G', fifth: 'B' },
-            'E7': { root: 'E', third: 'G#', fifth: 'B', seventh: 'D' },
-            'G': { root: 'G', third: 'B', fifth: 'D' },
-            'Gm': { root: 'G', third: 'Bb', fifth: 'D' },
-            'C': { root: 'C', third: 'E', fifth: 'G' },
-            // ディミニッシュ
-            'Adim': { root: 'A', third: 'C', dim5: 'Eb' },
-            'Adim7': { root: 'A', third: 'C', dim5: 'Eb', sixth: 'Gb' },
-            'Ddim': { root: 'D', third: 'F', dim5: 'Ab' },
-            'Ddim7': { root: 'D', third: 'F', dim5: 'Ab', sixth: 'B' },
-            'Edim': { root: 'E', third: 'G', dim5: 'Bb' },
-            'Edim7': { root: 'E', third: 'G', dim5: 'Bb', sixth: 'Db' },
-            // オーグメント
-            'Aaug': { root: 'A', third: 'C#', aug5: 'F' },
-            'Daug': { root: 'D', third: 'F#', aug5: 'A#' },
-            'Eaug': { root: 'E', third: 'G#', aug5: 'C' },
+        // コード種別のインターバルパターン（半音単位）
+        // 各プロパティは [音程タイプ, 半音数] のペア
+        const chordTypePatterns = {
+            // 基本
+            'major':  { intervals: { root: 0, third: 4, fifth: 7 } },
+            'minor':  { intervals: { root: 0, third: 3, fifth: 7 } },
+            '7':      { intervals: { root: 0, third: 4, fifth: 7, seventh: 10 } },
+            'm7':     { intervals: { root: 0, third: 3, fifth: 7, seventh: 10 } },
+            'maj7':   { intervals: { root: 0, third: 4, fifth: 7, seventh: 11 } },
+            // ディミニッシュ/オーグメント
+            'dim':    { intervals: { root: 0, third: 3, dim5: 6 } },
+            'dim7':   { intervals: { root: 0, third: 3, dim5: 6, sixth: 9 } },
+            'm7b5':   { intervals: { root: 0, third: 3, dim5: 6, seventh: 10 } },
+            'aug':    { intervals: { root: 0, third: 4, aug5: 8 } },
             // サスペンド
-            'Asus2': { root: 'A', sus2: 'B', fifth: 'E' },
-            'Asus4': { root: 'A', sus4: 'D', fifth: 'E' },
-            'Dsus2': { root: 'D', sus2: 'E', fifth: 'A' },
-            'Dsus4': { root: 'D', sus4: 'G', fifth: 'A' },
-            'Esus2': { root: 'E', sus2: 'F#', fifth: 'B' },
-            'Esus4': { root: 'E', sus4: 'A', fifth: 'B' },
+            'sus2':   { intervals: { root: 0, sus2: 2, fifth: 7 } },
+            'sus4':   { intervals: { root: 0, sus4: 5, fifth: 7 } },
+            '7sus4':  { intervals: { root: 0, sus4: 5, fifth: 7, seventh: 10 } },
+            // 6th
+            '6':      { intervals: { root: 0, third: 4, fifth: 7, sixth: 9 } },
+            'm6':     { intervals: { root: 0, third: 3, fifth: 7, sixth: 9 } },
             // 拡張コード
-            'Aadd9': { root: 'A', third: 'C#', fifth: 'E', ninth: 'B' },
-            'A9': { root: 'A', third: 'C#', fifth: 'E', seventh: 'G', ninth: 'B' },
-            'A6': { root: 'A', third: 'C#', fifth: 'E', sixth: 'F#' }
+            'add9':   { intervals: { root: 0, third: 4, fifth: 7, ninth: 14 } },
+            'madd9':  { intervals: { root: 0, third: 3, fifth: 7, ninth: 14 } },
+            '9':      { intervals: { root: 0, third: 4, fifth: 7, seventh: 10, ninth: 14 } },
+            'm9':     { intervals: { root: 0, third: 3, fifth: 7, seventh: 10, ninth: 14 } },
+            'maj9':   { intervals: { root: 0, third: 4, fifth: 7, seventh: 11, ninth: 14 } }
         };
+        
+        // 音名の配列（シャープ系）
+        const noteNamesSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        // 音名の配列（フラット系）
+        const noteNamesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        
+        // キーがフラット系かどうかを判定
+        function useFlatNotation(key) {
+            // フラット系のキー: F, Bb, Eb, Ab, Db, Gb と、マイナーキー Dm, Gm, Cm, Fm, Bbm, Ebm
+            const flatKeys = ['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'D#', 'G#', 'A#'];
+            return flatKeys.includes(key);
+        }
+        
+        // キーとコード種別からコードトーンを計算
+        function getChordTones(key, chordType) {
+            const pattern = chordTypePatterns[chordType];
+            if (!pattern) return null;
+            
+            const keyIndex = noteNamesSharp.indexOf(key) !== -1 
+                ? noteNamesSharp.indexOf(key) 
+                : noteNamesFlat.indexOf(key);
+            
+            if (keyIndex === -1) return null;
+            
+            const useFlat = useFlatNotation(key);
+            const noteNames = useFlat ? noteNamesFlat : noteNamesSharp;
+            
+            const tones = {};
+            for (const [toneType, semitones] of Object.entries(pattern.intervals)) {
+                const noteIndex = (keyIndex + semitones) % 12;
+                tones[toneType] = noteNames[noteIndex];
+            }
+            
+            return tones;
+        }
+        
+        // 現在選択されているコード情報を取得
+        function getCurrentChord() {
+            const key = document.getElementById('keySelect').value;
+            const chordType = document.getElementById('chordTypeSelect').value;
+            return { key, chordType, name: key + (chordType === 'major' ? '' : chordType) };
+        }
 
         // 音名を半音数に変換
         const noteToSemitone = {
@@ -452,8 +500,7 @@
             return enharmonicPairs[note1] === note2 || enharmonicPairs[note2] === note1;
         }
 
-        function getToneType(note, chord) {
-            const tones = chordTones[chord];
+        function getToneType(note, tones) {
             if (!tones || !note) return null;
             
             // 1. コードに定義されているトーンを優先的にチェック（異名同音も考慮）
@@ -881,12 +928,19 @@
         }
 
         function generateFretboard() {
-            const chord = document.getElementById('chordSelect').value;
+            const { key, chordType, name: chordName } = getCurrentChord();
             const startFret = parseInt(document.getElementById('startFret').value);
             const endFret = parseInt(document.getElementById('endFret').value);
             const displayMode = getDisplayMode();
             const realisticSpacing = document.getElementById('realisticFretSpacing').checked;
-            const tones = chordTones[chord];
+            const tones = getChordTones(key, chordType);
+            console.log('generateFretboard:', { key, chordType, tones }); // デバッグ用
+            
+            if (!tones) {
+                console.error('Failed to get chord tones for:', key, chordType);
+                return;
+            }
+            
             const tuning = getCurrentTuning();
             const strings = tuning.strings;
 
@@ -1030,6 +1084,8 @@
             const positionMarkOpacityValue = parseInt(document.getElementById('positionMarkOpacity').value) / 100;
             // ポジションマークの形状を取得
             const positionMarkShape = document.getElementById('positionMarkShape').value;
+            // ポジションマークの色を取得
+            const positionMarkColor = document.getElementById('positionMarkColor').value;
             
             // 形状に応じたポジションマークの配置を決定
             let positionMarks;
@@ -1193,7 +1249,7 @@
                 }
                 
                 if (element) {
-                    element.setAttribute('fill', '#bbb');
+                    element.setAttribute('fill', positionMarkColor);
                     element.setAttribute('opacity', positionMarkOpacityValue);
                     svg.appendChild(element);
                 }
@@ -1222,7 +1278,7 @@
                 for (let f = 0; f < fretCount; f++) {
                     const fretNum = startFret + f;
                     const note = getNoteAtPosition(s, fretNum);
-                    const toneType = getToneType(note, chord);
+                    const toneType = getToneType(note, tones);
                     
                     if (toneType) {
                         // 表示モードのチェック
@@ -1315,7 +1371,7 @@
                 for (let f = 0; f < fretCount; f++) {
                     const fretNum = startFret + f;
                     const note = getNoteAtPosition(s, fretNum);
-                    const toneType = getToneType(note, chord);
+                    const toneType = getToneType(note, tones);
 
                     if (toneType) {
                         // 表示モードのチェック
@@ -1439,7 +1495,7 @@
             title.setAttribute('font-size', '22');
             title.setAttribute('font-weight', 'bold');
             title.setAttribute('text-anchor', 'middle');
-            title.textContent = `${chord} - ${Object.values(tones).join(', ')}`;
+            title.textContent = `${chordName} - ${Object.values(tones).join(', ')}`;
             svg.appendChild(title);
 
             container.appendChild(svg);
@@ -1541,7 +1597,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `fretboard-${document.getElementById('chordSelect').value}.svg`;
+            a.download = `fretboard-${getCurrentChord().name}.svg`;
             a.click();
             URL.revokeObjectURL(url);
         }
@@ -1566,7 +1622,7 @@
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `fretboard-${document.getElementById('chordSelect').value}.png`;
+                    a.download = `fretboard-${getCurrentChord().name}.png`;
                     a.click();
                     URL.revokeObjectURL(url);
                 });
@@ -1577,8 +1633,8 @@
 
         // コード選択時に表示モードオプションを更新
         function updateDisplayModeOptions() {
-            const chord = document.getElementById('chordSelect').value;
-            const tones = chordTones[chord];
+            const { key, chordType } = getCurrentChord();
+            const tones = getChordTones(key, chordType);
             const allModeLabel = document.getElementById('allModeToggleLabel');
             const allModeToggle = document.getElementById('allModeToggle');
             
@@ -1601,8 +1657,12 @@
             }
         }
         
-        // コード選択のイベントリスナーを設定
-        document.getElementById('chordSelect').addEventListener('change', function() {
+        // キーとコード種別選択のイベントリスナーを設定
+        document.getElementById('keySelect').addEventListener('change', function() {
+            updateDisplayModeOptions();
+            generateFretboard();
+        });
+        document.getElementById('chordTypeSelect').addEventListener('change', function() {
             updateDisplayModeOptions();
             generateFretboard();
         });
@@ -1638,6 +1698,9 @@
         // ポジションマーク形状変更時に自動生成
         document.getElementById('positionMarkShape').addEventListener('change', generateFretboard);
         
+        // ポジションマーク色変更時に自動生成
+        document.getElementById('positionMarkColor').addEventListener('change', generateFretboard);
+        
         // ポジションマーク濃度スライダーのイベントリスナー
         const positionMarkOpacitySlider = document.getElementById('positionMarkOpacity');
         const positionMarkOpacityValueDisplay = document.getElementById('positionMarkOpacityValue');
@@ -1661,23 +1724,25 @@
         // テストコード: 凡例と指板の表示の一致を確認
         function testLegendConsistency() {
             const tests = [];
-            const chords = Object.keys(chordTones);
             
-            // 代表的なコードと表示モードの組み合わせでテスト
+            // 代表的なキー+コード種別と表示モードの組み合わせでテスト
             const testCases = [
-                { chord: 'A', displayMode: 'triad' },
-                { chord: 'A', displayMode: 'seventh' },
-                { chord: 'A7', displayMode: 'seventh' },
-                { chord: 'Am', displayMode: 'triad' },
-                { chord: 'Asus2', displayMode: 'triad' },
-                { chord: 'Adim', displayMode: 'triad' },
-                { chord: 'Aaug', displayMode: 'triad' },
-                { chord: 'A9', displayMode: 'all' }
+                { key: 'A', chordType: 'major', displayMode: 'triad' },
+                { key: 'A', chordType: 'major', displayMode: 'seventh' },
+                { key: 'A', chordType: '7', displayMode: 'seventh' },
+                { key: 'A', chordType: 'minor', displayMode: 'triad' },
+                { key: 'A', chordType: 'sus2', displayMode: 'triad' },
+                { key: 'A', chordType: 'dim', displayMode: 'triad' },
+                { key: 'A', chordType: 'aug', displayMode: 'triad' },
+                { key: 'A', chordType: '9', displayMode: 'all' },
+                { key: 'C', chordType: 'major', displayMode: 'triad' },
+                { key: 'F#', chordType: 'm7', displayMode: 'seventh' }
             ];
             
             for (const testCase of testCases) {
-                const { chord, displayMode } = testCase;
-                const tones = chordTones[chord];
+                const { key, chordType, displayMode } = testCase;
+                const tones = getChordTones(key, chordType);
+                const chordName = key + (chordType === 'major' ? '' : chordType);
                 if (!tones) continue;
                 
                 // 実際の表示ロジックに基づいて、どのトーンタイプが表示されるかを判断
@@ -1697,8 +1762,8 @@
                     'sixth': 'sixth'
                 };
                 
-                for (const [key, mappedType] of Object.entries(toneTypeMap)) {
-                    if (tones[key]) {
+                for (const [toneKey, mappedType] of Object.entries(toneTypeMap)) {
+                    if (tones[toneKey]) {
                         let shouldBeDisplayed = false;
                         
                         if (displayMode === 'triad') {
@@ -1721,7 +1786,7 @@
                 );
                 
                 tests.push({
-                    chord,
+                    chord: chordName,
                     displayMode,
                     expectedTypes: Object.keys(mockTonePositions),
                     actualTypes: displayedTypes,
